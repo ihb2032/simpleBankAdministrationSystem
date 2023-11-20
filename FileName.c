@@ -73,6 +73,7 @@ void createAccount(struct Account* acc)
 			}
 		}
 	} while (_bool);
+	_bool = true;
 	printf("请输入密码，不超过20位，需要包括数字、字母和特殊字符：");
 	do
 	{
@@ -95,11 +96,14 @@ void createAccount(struct Account* acc)
 	} while (_bool);
 	printf("请输入初始金额：");
 	scanf("%f", acc->balance);
+	_bool = true;
+	char length[6];
 	printf("请设置支付密码：");
 	do
 	{
 		scanf("%d", acc->securePassword);
-		if (sizeof(acc->securePassword) != 6)
+		sprintf(length, "%d", *acc->securePassword);
+		if (strlen(length) != 6)
 		{
 			printf("不合法，支付密码应该有六位，请重新输入：");
 		}
@@ -116,12 +120,12 @@ void createAccount(struct Account* acc)
 	fclose(account);
 }
 
-void loginAccount(struct Account* acc)
+void loginAccount(struct Account acc[])
 {
-	FILE* account = fopen("account.txt", "r");
+	FILE *account = fopen("account.txt", "r");
 	if (account != NULL)
 	{
-		fscanf(account, "%s %s %f %d", acc->username, acc->password, acc->balance, acc->securePassword);
+
 	}
 	fclose(account);
 	char username[10];

@@ -7,8 +7,8 @@
 #include<ctype.h>
 struct Account
 {
-	char username[11];
-	char password[21];
+	char username[10];
+	char password[20];
 	float balance;
 	int securePassword;
 };
@@ -147,7 +147,6 @@ void createAccount()
 	{
 		printf("内存分配失败\n");
 		free(acc);
-		acc = NULL;
 		return;
 	}
 	char line[1024];
@@ -171,7 +170,6 @@ void createAccount()
 	printf("请输入用户名，最多10位，只能包括字母和数字：");
 	do
 	{
-		while ((c = getchar()) != '\n' && c != EOF);
 		fgets(acc->username, sizeof(acc->username), stdin);
 		acc->username[strcspn(acc->username, "\n")] = 0;
 		rewind(account);
@@ -197,10 +195,7 @@ void createAccount()
 			printf("输入包含非法字符，请重新输入：");
 			continue;
 		}
-		else
-		{
 			boolUsername = false;
-		}
 	} while (boolUsername);
 	bool boolPassword = true;
 	printf("请输入密码，最多20位，需要包括数字、字母和特殊字符：");
@@ -213,10 +208,7 @@ void createAccount()
 			printf("输入包含非法字符，请重新输入：");
 			continue;
 		}
-		else
-		{
 			boolPassword = false;
-		}
 	} while (boolPassword);
 	printf("请输入初始金额：");
 	scanf("%f", &acc->balance);
@@ -247,10 +239,7 @@ void createAccount()
 		{
 			printf("不合法，支付密码应该有六位，请重新输入：");
 		}
-		else
-		{
 			boolSecurePassword = false;
-		}
 	} while (boolSecurePassword);
 	printf("账户创建成功\n");
 	fprintf(account, "%s %s %.2f %d\n", acc->username, acc->password, acc->balance, acc->securePassword);
@@ -283,7 +272,8 @@ void loginAccount(struct Account* acc)
 		return;
 	}
 	printf("请输入用户名：");
-	scanf("%10s", username);
+	fgets(username, sizeof(username), stdin);
+	username[strcspn(username, "\n")] = 0;
 	while (fscanf(account, "%s %s %f %d", acc->username, acc->password, &acc->balance, &acc->securePassword) != EOF)
 	{
 		if (strcmp(acc->username, username) == 0)
@@ -542,6 +532,8 @@ int main(void)
 			printf("范围不正确，正确的范围应该介于1-10之间，请重新输入\n");
 			continue;
 		}
+		int c;
+		while ((c = getchar()) != '\n' && c != EOF);
 		switch (choice)
 		{
 		case 1:

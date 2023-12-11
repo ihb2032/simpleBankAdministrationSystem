@@ -6,16 +6,16 @@
 #include<stdbool.h>
 #include<ctype.h>
 // 定义一个存储账户信息的结构体
-struct Account
+struct account
 {
 	char username[11];
 	char password[21];
 	float balance;
-	int securePassword;
+	int paymentPin;
 };
 
 // 定义一个判断用户名正确性的函数
-int isValidUsername(char* username)
+int isValidUsername(const char* username)
 {
 	bool hasDigit = false;
 	bool hasAlpha = false;
@@ -50,7 +50,7 @@ int isValidUsername(char* username)
 }
 
 // 定义一个判断密码正确性的函数
-int isValidPassword(char* password)
+int isValidPassword(const char* password)
 {
 	bool hasDigit = false;
 	bool hasAlpha = false;
@@ -94,12 +94,12 @@ int isValidPassword(char* password)
 }
 
 // 定义一个判断支付密码正确性的函数
-bool isValidSecurePassword(int num)
+bool isValidSecurePassword(int paymentPin)
 {
 	int count = 0;
-	while (num != 0)
+	while (paymentPin != 0)
 	{
-		num = num / 10;
+		paymentPin = paymentPin / 10;
 		count++;
 	}
 	if (count != 6)
@@ -109,43 +109,107 @@ bool isValidSecurePassword(int num)
 	return true;
 }
 
-// 定义一个接收用户名输入的函数
-void getUsername(char username[11])
+// 接收用户名和密码的输入并进行验证
+void checkAndReadInput(char input[], int inputSize, FILE* accountFile, int (*validateInput)(const char*), const char* inputPrompt, const char* errorMessages[])
 {
-	fgets(username, 11, stdin);
-	username[strcspn(username, "\n")] = 0;
+	bool inputValid;
+	char buffer[1024];
+	do
+	{
+		inputValid = true;
+		printf("%s", inputPrompt);
+		fgets(buffer, sizeof(buffer), stdin);
+		if (strchr(buffer, '\n') == NULL)
+		{
+			int extraChar;
+			while ((extraChar = getchar()) != '\n' && extraChar != EOF);
+		}
+		size_t len = strlen(buffer);
+		if (buffer[len - 1] == '\n')
+		{
+			buffer[len - 1] = '\0';
+		}
+		strncpy(input, buffer, inputSize - 1);
+		input[inputSize - 1] = '\0';
+		if (accountFile != NULL)
+		{
+			struct account tempAccount;
+			rewind(accountFile);
+			while (fgets(buffer, sizeof(buffer), accountFile) != NULL)
+			{
+				sscanf(buffer, "%s %s %f %d", tempAccount.username, tempAccount.password, &tempAccount.balance, &tempAccount.paymentPin);
+				if (strcmp(input, tempAccount.username) == 0)
+				{
+					printf("账户已经存在，请重新输入\n");
+					inputValid = false;
+					break;
+				}
+			}
+		}
+		int validationResult = validateInput(input);
+		if (validationResult != 0)
+		{
+			printf("%s", errorMessages[validationResult]);
+			inputValid = false;
+		}
+	} while (!inputValid);
 }
 
-// 定义一个接收用户输入密码的函数
-void getPassword(char password[21])
+// 定义一个接收并验证用户名的函数
+void checkAndReadUsername(char username[11], FILE* accountFile)
 {
-	fgets(password, 21, stdin);
-	password[strcspn(password, "\n")] = 0;
+	char* usernameErrors[] = { "", "用户名最多10位，请重新输入\n", "输入非法字符，请重新输入\n", "用户名需要包括字母和数字，请重新输入\n" };
+	checkAndReadInput(username, sizeof(username), accountFile, isValidUsername, "请输入用户名，最多10位，只能包括字母和数字：", usernameErrors);
+}
+
+// 定义一个接收并验证密码的函数
+void checkAndReadPassword(char password[21])
+{
+	char* passwordErrors[] = { "", "密码不能少于八位，请重新输入\n", "密码不能大于20位，请重新输入\n", "输入非法字符，请重新输入\n", "密码必须包括字母、数字和特殊字符，请重新输入\n" };
+	checkAndReadInput(password, sizeof(password), NULL, isValidPassword, "请输入密码，最多20位，需要包括数字、字母和特殊字符：", passwordErrors);
 }
 
 // 定义一个接收用户输入金额的函数
-void getBalance(float* balance)
+void inputBalance(float* balance)
 {
-	int c;
-	scanf("%f", balance);
-	while ((c = getchar()) != '\n' && c != EOF);
+	int scanResult;
+	int extraChar;
+	do
+	{
+		scanResult = scanf("%f", balance);
+		if (scanResult != 1)
+		{
+			printf("无效输入，请输入一个数字：");
+		}
+		while ((extraChar = getchar()) != '\n' && extraChar != EOF);
+	} while (scanResult != 1);
 }
 
 // 定义一个接收用户输入支付密码的函数
-void getSecurePassword(int* securePassword)
+void inputSecurePassword(int* paymentPin)
 {
-	int c;
-	scanf("%d", securePassword);
-	while ((c = getchar()) != '\n' && c != EOF);
+	int scanResult;
+	int extraChar;
+	do
+	{
+		scanResult = scanf("%d", paymentPin);
+		if (scanResult != 1)
+		{
+			printf("无效输入，请输入一个数字：\n");
+		}
+		while ((extraChar = getchar()) != '\n' && extraChar != EOF);
+	} while (scanResult != 1);
 }
 
 // 定义一个更新文件信息的函数
-void updateAccountInFile(struct Account* acc)
+void updateAccountInFile(struct account* accountPtr)
 {
+	struct account* tempAccount = malloc(sizeof(struct account));
 	FILE* account = fopen("account.txt", "r");
 	if (account == NULL)
 	{
 		printf("无法打开账户文件。\n");
+		free(tempAccount);
 		return;
 	}
 	FILE* temp = fopen("temp.txt", "w");
@@ -153,16 +217,16 @@ void updateAccountInFile(struct Account* acc)
 	{
 		printf("无法创建临时文件。\n");
 		fclose(account);
+		free(tempAccount);
 		return;
 	}
-	struct Account* acc_temp = malloc(sizeof(struct Account));
 	char line[1024];
 	while (fgets(line, sizeof(line), account) != NULL)
 	{
-		sscanf(line, "%s %s %f %d", acc_temp->username, acc_temp->password, &acc_temp->balance, &acc_temp->securePassword);
-		if (strcmp(acc_temp->username, acc->username) == 0)
+		sscanf(line, "%s %s %f %d", tempAccount->username, tempAccount->password, &tempAccount->balance, &tempAccount->paymentPin);
+		if (strcmp(tempAccount->username, accountPtr->username) == 0)
 		{
-			fprintf(temp, "%s %s %.2f %d\n", acc->username, acc->password, acc->balance, acc->securePassword);
+			fprintf(temp, "%s %s %.2f %d\n", accountPtr->username, accountPtr->password, accountPtr->balance, accountPtr->paymentPin);
 		}
 		else
 		{
@@ -171,21 +235,57 @@ void updateAccountInFile(struct Account* acc)
 	}
 	fclose(account);
 	fclose(temp);
+	free(tempAccount);
 	remove("account.txt");
 	rename("temp.txt", "account.txt");
-	free(acc_temp);
 }
 
 // 判断用户是否已经登录
-bool isLogin(struct Account** acc)
+bool isLogin(struct account** accountPtr)
 {
-	if (acc != NULL)
+	if (*accountPtr != NULL)
 	{
 		return true;
 	}
 	else
 	{
 		return false;
+	}
+}
+
+bool verifyPaymentPin(const struct account* accountPtr)
+{
+	int paymentPin;
+	printf("请输入支付密码：");
+	inputSecurePassword(&paymentPin);
+	if (!isValidSecurePassword(paymentPin))
+	{
+		printf("支付密码必须有六位，请重新输入\n");
+		return false;
+	}
+	if (paymentPin != accountPtr->paymentPin)
+	{
+		printf("支付密码错误，请重新输入\n");
+		return false;
+	}
+	return true;
+}
+
+// 接受用户输入
+void userChoice(int* choice)
+{
+	char discardChar;
+	if (scanf("%d", choice) != 1)
+	{
+		printf("无效输入，请输入一个数字\n");
+		while ((discardChar = getchar()) != '\n' && discardChar != EOF);
+		return;
+	}
+	if (*choice < 1 || *choice > 10)
+	{
+		printf("范围不正确，正确的范围应该介于1-10之间，请重新输入\n");
+		while ((discardChar = getchar()) != '\n' && discardChar != EOF);
+		return;
 	}
 }
 
@@ -206,108 +306,32 @@ void displayMenu(void)
 }
 
 // 创建账户
-void createAccount(struct Account** acc)
+void createAccount(struct account** accountPtr)
 {
-	if (isLogin(acc))
+	if (isLogin(accountPtr))
 	{
 		printf("账户已经登录，不能继续创建\n");
 		return;
 	}
-	struct Account* acc_temp;
-	acc_temp = (struct Account*)malloc(sizeof(struct Account));
-	if (acc_temp == NULL)
-	{
-		printf("内存分配失败\n");
-		return;
-	}
-	char line[1024];
 	FILE* account = fopen("account.txt", "a+");
 	if (account == NULL)
 	{
 		printf("文件打开失败\n");
-		free(acc_temp);
 		return;
 	}
 	char username[11];
 	char password[21];
 	float balance;
-	int securePassword;
-	printf("请输入用户名，最多10位，只能包括字母和数字：");
-	while (true)
-	{
-		getUsername(username);
-		rewind(account);
-		while (fgets(line, sizeof(line), account) != NULL)
-		{
-			if (sscanf(line, "%s %s %f %d", acc_temp->username, acc_temp->password, &acc_temp->balance, &acc_temp->securePassword) == 4)
-			{
-				if (strcmp(username, acc_temp->username) == 0)
-				{
-					printf("账户已经存在，请重新输入\n");
-					continue;
-				}
-			}
-		}
-		int usernameValidationResult = isValidUsername(username);
-		switch (usernameValidationResult)
-		{
-		case 0:
-			break;
-		case 1:
-			printf("用户名最多10位，请重新输入\n");
-			break;
-		case 2:
-			printf("输入非法字符，请重新输入\n");
-			break;
-		case 3:
-			printf("用户名需要包括字母和数字，请重新输入\n");
-			break;
-		default:
-			break;
-		}
-		if (usernameValidationResult != 0)
-		{
-			continue;
-		}
-		break;
-	}
-	printf("请输入密码，最多20位，需要包括数字、字母和特殊字符：");
-	while (true)
-	{
-		getPassword(password);
-		int passwordValidationResult = isValidPassword(password);
-		switch (passwordValidationResult)
-		{
-		case 0:
-			break;
-		case 1:
-			printf("密码不能少于八位，请重新输入\n");
-			break;
-		case 2:
-			printf("密码不能大于20位，请重新输入\n");
-			break;
-		case 3:
-			printf("输入非法字符，请重新输入\n");
-			break;
-		case 4:
-			printf("密码必须包括字母、数字和特殊字符，请重新输入\n");
-			break;
-		default:
-			break;
-		}
-		if (passwordValidationResult != 0)
-		{
-			continue;
-		}
-		break;
-	}
+	int paymentPin;
+	checkAndReadUsername(username, account);
+	checkAndReadPassword(password);
 	printf("请输入初始金额：");
-	getBalance(&balance);
+	inputBalance(&balance);
 	printf("请设置支付密码，应该有六位：");
 	while (true)
 	{
-		getSecurePassword(&securePassword);
-		if (!isValidSecurePassword(securePassword))
+		inputSecurePassword(&paymentPin);
+		if (!isValidSecurePassword(paymentPin))
 		{
 			printf("支付密码必须有六位，请重新输入\n");
 			continue;
@@ -318,200 +342,121 @@ void createAccount(struct Account** acc)
 		}
 	}
 	printf("账户创建成功\n");
-	fprintf(account, "%s %s %.2f %d\n", username, password, balance, securePassword);
-	free(acc_temp);
+	fprintf(account, "%s %s %.2f %d\n", username, password, balance, paymentPin);
 	fclose(account);
 }
 
 // 登录
-void loginAccount(struct Account** acc)
+void loginAccount(struct account** accountPtr)
 {
-	if (isLogin(acc))
+	if (isLogin(accountPtr))
 	{
 		printf("已经登录，不能登录第二个\n");
 		return;
 	}
 	char username[11];
 	char password[21];
-	struct Account* acc_local = malloc(sizeof(struct Account));
+	struct account* localAccount = malloc(sizeof(struct account));
 	FILE* account = fopen("account.txt", "r");
 	if (account == NULL)
 	{
 		printf("文件打开失败\n");
+		free(localAccount);
 		return;
 	}
-	printf("请输入用户名：");
-	while (true)
+	while (fscanf(account, "%s %s %f %d", localAccount->username, localAccount->password, &localAccount->balance, &localAccount->paymentPin) != EOF)
 	{
-		getUsername(username);
-		int usernameValidationResult = isValidUsername(username);
-		switch (usernameValidationResult)
+		checkAndReadUsername(username, account);
+		if (strcmp(username, localAccount->username) == 0)
 		{
-		case 0:
-			break;
-		case 1:
-			printf("用户名最多10位，请重新输入\n");
-			break;
-		case 2:
-			printf("输入非法字符，请重新输入\n");
-			break;
-		case 3:
-			printf("用户名需要包括字母和数字，请重新输入\n");
-			break;
-		default:
 			break;
 		}
-		if (usernameValidationResult != 0)
+		else
 		{
+			printf("用户名错误\n");
+			fclose(account);
 			continue;
 		}
-		break;
 	}
-	while (fscanf(account, "%s %s %f %d", acc_local->username, acc_local->password, &acc_local->balance, &acc_local->securePassword) != EOF)
-	{
-		if (strcmp(username, acc_local->username) == 0)
-		{
-			break;
-		}
-		printf("账户不存在\n");
-		break;
-	}
-	printf("请输入密码：");
 	while (true)
 	{
-		getPassword(password);
-		int passwordValidationResult = isValidPassword(password);
-		switch (passwordValidationResult)
-		{
-		case 0:
-			break;
-		case 1:
-			printf("密码不能少于八位，请重新输入\n");
-			break;
-		case 2:
-			printf("密码不能大于20位，请重新输入\n");
-			break;
-		case 3:
-			printf("输入非法字符，请重新输入\n");
-			break;
-		case 4:
-			printf("密码必须包括字母、数字和特殊字符，请重新输入\n");
-			break;
-		default:
-			break;
-		}
-		if (passwordValidationResult != 0)
-		{
-			continue;
-		}
-		if (strcmp(password, acc_local->password) != 0)
+		checkAndReadPassword(password);
+		if (strcmp(password, localAccount->password) != 0)
 		{
 			printf("密码错误，请重新输入\n");
 			continue;
 		}
 		else
 		{
-			break;
+			printf("登录成功\n");
+			*accountPtr = localAccount;
+			updateAccountInFile(localAccount);
+			fclose(account);
+			return;
 		}
 	}
-	printf("登录成功\n");
-	*acc = acc_local;
-	updateAccountInFile(acc_local);
-	fclose(account);
 }
 
 // 查看余额
-void viewBalance(struct Account** acc)
+void viewBalance(struct account** accountPtr)
 {
-	if (isLogin(acc))
+	if (isLogin(accountPtr))
 	{
-		printf("你的金额为：%.2f\n", (*acc)->balance);
+		printf("你的金额为：%.2f\n", (*accountPtr)->balance);
 	}
 	else
 	{
 		printf("还没有登录，请先登录\n");
+		return;
 	}
-	return;
 }
 
 // 存款
-void deposit(struct Account** acc)
+void deposit(struct account** accountPtr)
 {
 	float balance;
-	int securePassword;
-	if (!isLogin(acc))
+	if (!isLogin(accountPtr))
 	{
 		printf("没有登录，请先登录\n");
 		return;
 	}
-	printf("请输入支付密码：");
-	while (true)
+	if (!verifyPaymentPin(*accountPtr))
 	{
-		getSecurePassword(&securePassword);
-		if (!isValidSecurePassword(securePassword))
-		{
-			printf("支付密码必须有六位，请重新输入\n");
-			continue;
-		}
-		if (securePassword != (*acc)->securePassword)
-		{
-			printf("密码错误，请重新输入\n");
-			continue;
-		}
-		else
-		{
-			break;
-		}
+		return;
 	}
 	printf("请输入存款金额：");
-	getBalance(&balance);
-	(*acc)->balance = (*acc)->balance + balance;
-	updateAccountInFile(*acc);
+	inputBalance(&balance);
+	(*accountPtr)->balance = (*accountPtr)->balance + balance;
+	updateAccountInFile(*accountPtr);
 	printf("存款成功\n");
 }
 
 // 取款
-void withdrawal(struct Account** acc)
+void withdrawal(struct account** accountPtr)
 {
-	if (!isLogin(acc))
+	if (!isLogin(accountPtr))
 	{
 		printf("没有登录，请先登录\n");
 		return;
 	}
 	float balance;
-	int securePassword;
-	printf("请输入支付密码：");
-	while (true)
+	if (!verifyPaymentPin(*accountPtr))
 	{
-		getSecurePassword(&securePassword);
-		if (!isValidSecurePassword(securePassword))
-		{
-			printf("支付密码必须有六位，请重新输入\n");
-			continue;
-		}
-		if (securePassword != (*acc)->securePassword)
-		{
-			printf("密码错误，请重新输入\n");
-			continue;
-		}
-		else
-		{
-			break;
-		}
+		return;
 	}
 	printf("请输入取款金额：");
 	while (true)
 	{
-		getBalance(&balance);
-		if ((*acc)->balance - balance < 0)
+		inputBalance(&balance);
+		if ((*accountPtr)->balance - balance < 0)
 		{
-			printf("余额不足，你的余额还有%f，请重新输入：", balance);
+			printf("余额不足，你的余额还有%f，请重新输入：", (*accountPtr)->balance);
 			continue;
 		}
 		else
 		{
-			(*acc)->balance = (*acc)->balance - balance;
-			updateAccountInFile(*acc);
+			(*accountPtr)->balance = (*accountPtr)->balance - balance;
+			updateAccountInFile(*accountPtr);
 			printf("取款成功\n");
 			return;
 		}
@@ -519,10 +464,10 @@ void withdrawal(struct Account** acc)
 }
 
 // 修改密码
-void changePassword(struct Account** acc)
+void changePassword(struct account** accountPtr)
 {
 	char password[21];
-	if (!isLogin(acc))
+	if (!isLogin(accountPtr))
 	{
 		printf("没有登录，请先登录\n");
 		return;
@@ -530,46 +475,19 @@ void changePassword(struct Account** acc)
 	printf("请输入新密码：");
 	while (true)
 	{
-		getPassword(password);
-		int passwordValidationResult = isValidPassword(password);
-		switch (passwordValidationResult)
-		{
-		case 0:
-			break;
-		case 1:
-			printf("密码不能少于八位，请重新输入\n");
-			break;
-		case 2:
-			printf("密码不能大于20位，请重新输入\n");
-			break;
-		case 3:
-			printf("输入非法字符，请重新输入\n");
-			break;
-		case 4:
-			printf("密码必须包括字母、数字和特殊字符，请重新输入\n");
-			break;
-		default:
-			break;
-		}
-		if (passwordValidationResult != 0)
-		{
-			continue;
-		}
-		else
-		{
-			strcpy((*acc)->password, password);
-			updateAccountInFile(*acc);
-			printf("密码修改成功\n");
-			return;
-		}
+		checkAndReadPassword(password);
+		strcpy((*accountPtr)->password, password);
+		updateAccountInFile(*accountPtr);
+		printf("密码修改成功\n");
+		return;
 	}
 }
 
 // 修改支付密码
-void changeSecurePassword(struct Account** acc)
+void changeSecurePassword(struct account** accountPtr)
 {
-	int securePassword;
-	if (!isLogin(acc))
+	int paymentPin;
+	if (!isLogin(accountPtr))
 	{
 		printf("没有登录，请先登录\n");
 		return;
@@ -577,16 +495,16 @@ void changeSecurePassword(struct Account** acc)
 	printf("请输入修改的支付密码：");
 	while (true)
 	{
-		getSecurePassword(&securePassword);
-		if (!isValidSecurePassword(securePassword))
+		inputSecurePassword(&paymentPin);
+		if (!isValidSecurePassword(paymentPin))
 		{
 			printf("支付密码必须有六位，请重新输入\n");
 			continue;
 		}
 		else
 		{
-			(*acc)->securePassword = securePassword;
-			updateAccountInFile(*acc);
+			(*accountPtr)->paymentPin = paymentPin;
+			updateAccountInFile(*accountPtr);
 			printf("支付密码修改成功\n");
 			return;
 		}
@@ -594,22 +512,22 @@ void changeSecurePassword(struct Account** acc)
 }
 
 // 退出系统
-void logoutAccount(struct Account** acc)
+void logoutAccount(struct account** accountPtr)
 {
-	if (!isLogin(acc))
+	if (!isLogin(accountPtr))
 	{
 		printf("账户没有登录\n");
 		return;
 	}
-	free(*acc);
-	acc = NULL;
+	free(*accountPtr);
+	*accountPtr = NULL;
 	printf("你已成功注销\n");
 }
 
 // 删除账户
-void removeAccount(struct Account** acc)
+void removeAccount(struct account** accountPtr)
 {
-	if (!isLogin(acc))
+	if (!isLogin(accountPtr))
 	{
 		printf("没有登录，请先登录\n");
 		return;
@@ -629,13 +547,13 @@ void removeAccount(struct Account** acc)
 	}
 	char line[1024];
 	bool accountRemoved = false;
-	struct Account* acc_local;
-	acc_local = (struct Account*)malloc(sizeof(struct Account));
+	struct account* localAccount;
+	localAccount = (struct account*)malloc(sizeof(struct account));
 	while (fgets(line, sizeof(line), account) != NULL)
 	{
-		if (sscanf(line, "%s %s %f %d", acc_local->username, acc_local->password, &acc_local->balance, &acc_local->securePassword) == 4)
+		if (sscanf(line, "%s %s %f %d", localAccount->username, localAccount->password, &localAccount->balance, &localAccount->paymentPin) == 4)
 		{
-			if (strcmp((*acc)->username, acc_local->username) != 0)
+			if (strcmp((*accountPtr)->username, localAccount->username) != 0)
 			{
 				fputs(line, temp);
 			}
@@ -645,21 +563,24 @@ void removeAccount(struct Account** acc)
 			}
 		}
 	}
-	fclose(account);
-	fclose(temp);
+	free(localAccount);
 	if (accountRemoved)
 	{
 		remove("account.txt");
 		rename("temp.txt", "account.txt");
-		printf("账户已成功删除。\n");
-		free(*acc);
+		printf("账户已成功删除\n");
+		free(*accountPtr);
+		*accountPtr = NULL;
+		fclose(account);
+		fclose(temp);
 		return;
 	}
 	else
 	{
 		remove("temp.txt");
-		printf("没有找到要删除的账户。\n");
-		free(*acc);
+		printf("没有找到要删除的账户\n");
+		fclose(account);
+		fclose(temp);
 		return;
 	}
 }
@@ -667,61 +588,43 @@ void removeAccount(struct Account** acc)
 int main(void)
 {
 	int choice;
-	int c;
 	bool running = true;
-	struct Account* acc = NULL;
-	acc = (struct Account*)malloc(sizeof(struct Account));
-	if (acc == NULL)
-	{
-		printf("内存分配失败\n");
-		return 1;
-	}
+	struct account* currentAccount = NULL;
 	do
 	{
 		displayMenu();
-		if (scanf("%d", &choice) != 1)
-		{
-			printf("无效输入，请输入一个数字\n");
-			while ((c = getchar()) != '\n' && c != EOF);
-			continue;
-		}
-		if (choice < 1 || choice > 10)
-		{
-			printf("范围不正确，正确的范围应该介于1-10之间，请重新输入\n");
-			continue;
-		}
-		while ((c = getchar()) != '\n' && c != EOF);
+		userChoice(&choice);
 		switch (choice)
 		{
 		case 1:
-			createAccount(&acc);
+			createAccount(&currentAccount);
 			break;
 		case 2:
-			loginAccount(&acc);
+			loginAccount(&currentAccount);
 			break;
 		case 3:
-			viewBalance(&acc);
+			viewBalance(&currentAccount);
 			break;
 		case 4:
-			deposit(&acc);
+			deposit(&currentAccount);
 			break;
 		case 5:
-			withdrawal(&acc);
+			withdrawal(&currentAccount);
 			break;
 		case 6:
-			changePassword(&acc);
+			changePassword(&currentAccount);
 			break;
 		case 7:
-			changeSecurePassword(&acc);
+			changeSecurePassword(&currentAccount);
 			break;
 		case 8:
-			logoutAccount(&acc);
+			logoutAccount(&currentAccount);
 			break;
 		case 9:
-			removeAccount(&acc);
+			removeAccount(&currentAccount);
 			break;
 		case 10:
-			if (acc != NULL)
+			if (currentAccount != NULL)
 			{
 				printf("你还没有注销，请先注销\n");
 				break;
@@ -736,6 +639,6 @@ int main(void)
 			printf("请重新输入：\n");
 		}
 	} while (running);
-	free(acc);
+	free(currentAccount);
 	return 0;
 }

@@ -1,3 +1,2 @@
 ﻿  FileName.c
-D:\projects\simpleBankAdministrationSystem\FileName.c(214,13): warning C4133: “函数”: 从“const int *”到“const char *”的类型不兼容
   simpleBankAdministrationSystem.vcxproj -> D:\projects\simpleBankAdministrationSystem\x64\Debug\simpleBankAdministrationSystem.exe
